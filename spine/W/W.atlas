@@ -1,0 +1,17 @@
+W.png
+size:1024,512
+filter:Linear,Linear
+art
+bounds:2,2,376,362
+flash
+bounds:380,2,376,362
+rays
+bounds:758,2,256,256
+glow
+bounds:2,366,128,128
+ring
+bounds:132,366,128,128
+flare
+bounds:262,366,96,96
+spark
+bounds:360,366,48,48

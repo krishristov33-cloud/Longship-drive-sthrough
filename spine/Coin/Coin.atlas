@@ -1,0 +1,17 @@
+Coin.png
+size:1024,1024
+filter:Linear,Linear
+art
+bounds:2,2,306,388
+flash
+bounds:310,2,306,388
+rays
+bounds:618,2,256,256
+glow
+bounds:876,2,128,128
+ring
+bounds:2,392,128,128
+flare
+bounds:132,392,96,96
+spark
+bounds:230,392,48,48

@@ -1,0 +1,17 @@
+Mead.png
+size:1024,1024
+filter:Linear,Linear
+art
+bounds:2,2,344,388
+flash
+bounds:348,2,344,388
+rays
+bounds:694,2,256,256
+glow
+bounds:2,392,128,128
+ring
+bounds:132,392,128,128
+flare
+bounds:262,392,96,96
+spark
+bounds:360,392,48,48

@@ -1,0 +1,17 @@
+VikingMan.png
+size:1024,1024
+filter:Linear,Linear
+art
+bounds:2,2,370,424
+flash
+bounds:374,2,370,424
+rays
+bounds:746,2,256,256
+glow
+bounds:2,428,128,128
+ring
+bounds:132,428,128,128
+flare
+bounds:262,428,96,96
+spark
+bounds:360,428,48,48

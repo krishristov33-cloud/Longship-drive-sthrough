@@ -1,0 +1,17 @@
+Tray.png
+size:1024,512
+filter:Linear,Linear
+rays
+bounds:2,2,256,256
+art
+bounds:260,2,376,220
+flash
+bounds:638,2,376,220
+glow
+bounds:2,260,128,128
+ring
+bounds:132,260,128,128
+flare
+bounds:262,260,96,96
+spark
+bounds:360,260,48,48

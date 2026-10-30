@@ -1,0 +1,17 @@
+Wild.png
+size:1024,1024
+filter:Linear,Linear
+art
+bounds:2,2,382,424
+flash
+bounds:386,2,382,424
+rays
+bounds:2,428,256,256
+glow
+bounds:260,428,128,128
+ring
+bounds:390,428,128,128
+flare
+bounds:520,428,96,96
+spark
+bounds:618,428,48,48

@@ -1,0 +1,17 @@
+K.png
+size:1024,1024
+filter:Linear,Linear
+art
+bounds:2,2,298,388
+flash
+bounds:302,2,298,388
+rays
+bounds:602,2,256,256
+glow
+bounds:860,2,128,128
+ring
+bounds:2,392,128,128
+flare
+bounds:132,392,96,96
+spark
+bounds:230,392,48,48

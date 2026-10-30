@@ -1,0 +1,17 @@
+A.png
+size:1024,1024
+filter:Linear,Linear
+art
+bounds:2,2,376,384
+flash
+bounds:380,2,376,384
+rays
+bounds:758,2,256,256
+glow
+bounds:2,388,128,128
+ring
+bounds:132,388,128,128
+flare
+bounds:262,388,96,96
+spark
+bounds:360,388,48,48

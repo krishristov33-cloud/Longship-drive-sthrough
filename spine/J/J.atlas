@@ -1,0 +1,17 @@
+J.png
+size:1024,512
+filter:Linear,Linear
+art
+bounds:2,2,242,388
+flash
+bounds:246,2,242,388
+rays
+bounds:490,2,256,256
+glow
+bounds:748,2,128,128
+ring
+bounds:878,2,128,128
+flare
+bounds:2,392,96,96
+spark
+bounds:100,392,48,48
