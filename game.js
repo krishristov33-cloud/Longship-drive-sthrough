@@ -4,8 +4,9 @@
 (async function () {
   'use strict';
   const E = globalThis.LavaAristocrat;
-  const ART = { J: 'J', Q: 'Q', K: 'K', A: 'A', NUGGETS: 'Nuggets', KETCHUP: 'Ketchup', TRAY: 'Tray', MEAD: 'Mead',
-    LONGSHIP: 'Longship', WSIGN: 'W', VGIRL: 'VikingGirl', VMAN: 'VikingMan', COIN: 'Coin', W: 'Wild', S: 'Scatter' };
+  // Tray Liner and Shield-Maiden Cashier were removed from the game (2026-10-31): no art, no Spine for them
+  const ART = { J: 'J', Q: 'Q', K: 'K', A: 'A', NUGGETS: 'Nuggets', KETCHUP: 'Ketchup', MEAD: 'Mead',
+    LONGSHIP: 'Longship', WSIGN: 'W', VMAN: 'VikingMan', COIN: 'Coin', W: 'Wild', S: 'Scatter' };
   const BETS = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
   const G = { balance: 1000, betIdx: 2, lastWin: 0, busy: false, sfx: true, music: true, grid: null, states: {},
     view: null, orient: null, spine: {}, spineStatus: {} };
@@ -29,6 +30,7 @@
   const usedLayer = (l) => l.visible !== false && l.group !== 'Symbols' && !/^Txt_/.test(l.name);   // reel symbols + baked text are replaced at runtime
   for (const k in LAYOUT) for (const l of LAYOUT[k].layers) if (usedLayer(l)) urls.add('assets/layers/' + base(l.placed));
   for (const a of Object.values(ART)) urls.add('assets/symbols/' + a + '.png');
+  urls.add('assets/fx/nugget.png');   // the loose nugget cut from Aiko's Nuggets art (Nugget Box flight)
   await PIXI.Assets.load([...urls]);
   await loadSpine();
   const Screens = window.LDTScreens;
@@ -42,6 +44,10 @@
     if (cman) await window.LDTViking.load('character/', cman);
   } catch (e) { console.warn('viking', e); }
   G.vikingStatus = () => window.LDTViking.status;
+  const Help = window.LDTHelp;
+  Help.init({ view: () => G.view, E, ART, BETS, bet: () => bet(), setBet: (d) => setBet(d), money: (v) => money(v),
+    tween: (o, to, ms, e) => tween(o, to, ms, e), blip: (f, ms, t, v) => blip(f, ms, t, v) });
+  G.help = Help;
   document.getElementById('loading').remove();
 
   /* ------------------------------------------------------------ spine */
@@ -105,7 +111,7 @@
   }
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   app.ticker.add((tk) => {
-    const dt = tk.deltaMS;
+    const dt = tk.deltaMS * (G.qaTimeScale || 1);   // QA slow motion (unset in play)
     for (const tw of tweens) {
       tw.t += dt; const k = Math.min(1, tw.t / tw.ms), e = tw.ease(k);
       if (tw.obj.destroyed) { tweens.delete(tw); tw.res(); continue; }
@@ -217,7 +223,7 @@
       case 'Bet_Arrow_L': button(sp, () => setBet(-1)); break;
       case 'Bet_Arrow_R': button(sp, () => setBet(1)); break;
       case 'Icon_Home': button(sp, () => toast('Home (prototype)')); break;
-      case 'Icon_Menu': button(sp, () => toast('Wild subs all but Scatter. 3+ Scatters = 8 Free Spins')); break;
+      case 'Icon_Menu': V.menuBtn = sp; button(sp, () => openHelp()); break;
       case 'Mead_Meter': {
         V.meterSprite = sp;
         V.meter = { x: l.x + l.w * 0.40, y: l.y + l.h * 0.22, w: l.w * 0.22, h: l.h * 0.66 };
@@ -235,12 +241,6 @@
   /* ------------------------------------------------------------ symbols */
   function makeSym(V, id) {
     const c = new PIXI.Container();
-    if (id === 'LOCK') {
-      const g = new PIXI.Graphics().roundRect(-V.symW / 2, -V.symH / 2, V.symW, V.symH, 24).fill({ color: 0x5a3a12, alpha: 0.9 })
-        .stroke({ color: 0xf5c64a, width: 4 });
-      const t = new PIXI.Text({ text: 'SPILLED\nMEAD', style: TXT(30, '#ffd75a') }); t.anchor.set(0.5);
-      c.addChild(g, t); c.baseScale = 1; c.symId = id; return c;
-    }
     const art = ART[id], sd = G.spine[art];
     if (sd) {
       const sp = spine.Spine.from({ skeleton: sd.sk, atlas: sd.at });
@@ -281,6 +281,7 @@
     G.orient = o; G.view = buildView(o); app.stage.addChild(G.view.root);
     G.vikingSpine = window.LDTViking.attach(G.view);   // null until Animoto's rig is loaded
     placeGrid(G.view, G.grid); refresh(); fit();
+    if (Help.isOpen()) Help.rerender();   // keep the help overlay open across an orientation change
   }
   function onResize() {
     const o = pickOrient();
@@ -332,7 +333,13 @@
   function setBet(d) {
     if (G.busy) return;
     G.betIdx = Math.max(0, Math.min(BETS.length - 1, G.betIdx + d)); blip(520 + G.betIdx * 40, 60); refresh();
+    if (Help.isOpen()) Help.rerender();   // paytable values follow the bet live
   }
+  function openHelp() {
+    if (G.busy || Screens.isOpen() || Help.isOpen()) return;
+    Help.show(0);
+  }
+  G.openHelp = openHelp;
   async function toast(msg, ms = 1600) {
     const V = G.view; V.toast.text = msg; V.toast.alpha = 1;
     clearTimeout(toast.t); toast.t = setTimeout(() => { if (G.view && G.view.toast) tween(G.view.toast, { alpha: 0 }, 300); }, ms);
@@ -374,7 +381,7 @@
     await Promise.all(jobs);
     G.grid = grid.map((c) => c.slice());
   }
-  function syncGrid(grid) {   // e.g. floor wipe turned a cell into LOCK
+  function syncGrid(grid) {   // trust the engine's grid
     const V = G.view;
     for (let r = 0; r < 5; r++) for (let y = 0; y < 3; y++) {
       if (V.cells[r][y].symId !== grid[r][y]) {
@@ -437,10 +444,10 @@
     vikingEvent('reels_stop');
     let shown = 0, cascades = 0;
     for (const step of sp.steps) {
+      for (const ev of step.events || []) if (ev.type === 'floorWipe') await nuggetTransform(ev, step);
       syncGrid(step.grid);
       const cells = [];
       for (const w of step.wins) cells.push(...w.cells);
-      if (step.scatterWin) cells.push(...step.scatterWin.cells);
       if (cells.length) {
         const from = shown; shown += step.x; cascades++;
         highlight(cells);
@@ -457,6 +464,7 @@
         await wait(600);
         unhighlight();
       }
+      if (step.scatterWin) await scatterShow(step.scatterWin, label);   // Scatters pay nothing: trigger only
       if (step.lamp) setMeter(step.lamp.after / step.lamp.max, null);
       for (const ev of step.events || []) {
         if (ev.type === 'eruption') await banner(`MEAD OVERFLOW!  x${ev.multAfter}`, 900);
@@ -467,6 +475,65 @@
       if (step.removed && step.removed.length && step.gridAfter) await cascade(step);
     }
   }
+  async function scatterShow(sw, label) {
+    highlight(sw.cells);
+    blip(520, 160, 'square', 0.05); setTimeout(() => blip(780, 200, 'square', 0.05), 140);
+    toast(sw.count + ' SCATTERS: ' + (label ? 'RETRIGGER!' : 'FREE SPINS!'), 1200);
+    await wait(1000);
+    unhighlight();
+  }
+  /* Nugget Box transformation (engine floor wipe): golden flash + fry-oil smoke + sparkle ring cover the cell, the
+     sprite swaps at peak cover, the new Nugget Box squash-pops (about 0.45 s), then one nugget arcs into the Mead
+     Meter and the meter rises only when it lands. Runs before the step is evaluated, so the new symbol can win. */
+  async function nuggetTransform(ev, step) {
+    const V = G.view, [r, y] = ev.cell, x = V.cx[r], yy = V.cy[y], old = V.cells[r][y];
+    blip(1300, 90, 'square', 0.05); setTimeout(() => blip(1950, 140, 'triangle', 0.07), 70);
+    if (G.qaNuggetSlow) G.qaTimeScale = G.qaNuggetSlow;
+    G.qaNugget = 'puff'; FX.nuggetPuff(V, x, yy, Math.min(V.colW, V.rowH));
+    FX.shake(V, 7);
+    await Promise.all([tween(old.scale, { x: 1.22, y: 0.72 }, 150, 'out'), tween(old, { alpha: 0.15 }, 150)]);
+    if (G.view !== V) return;
+    old.destroy({ children: true });                       // peak cover: swap
+    const n = makeSym(V, ev.to || 'NUGGETS'); n.position.set(x, yy); n.scale.set(0.35, 0.35); V.reels.addChild(n); V.cells[r][y] = n;
+    if (G.grid) G.grid[r][y] = n.symId;
+    G.qaNugget = 'pop'; await tween(n.scale, { x: 1.2, y: 0.85 }, 140, 'out');
+    await tween(n.scale, { x: 1, y: 1 }, 180, 'back');
+    G.qaNugget = 'flight'; await nuggetFlight(V, x, yy);
+    G.qaNugget = 'landed'; G.qaTimeScale = 1;
+    if (step.lamp) setMeter(Math.min(step.lamp.max, step.lamp.before + (ev.boost || 0)) / step.lamp.max, null);
+    await wait(260);
+  }
+  function nuggetFlight(V, x0, y0) {
+    return new Promise((res) => {
+      if (!V.meter) { res(); return; }
+      const tex = PIXI.Assets.get('assets/fx/nugget.png'), sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5); const s0 = (V.colW * 0.42) / tex.width; sp.scale.set(s0); sp.position.set(x0, y0);
+      V.fx.addChild(sp);
+      const m = V.meter, x1 = m.x + m.w / 2, y1 = m.y + m.h * (1 - Math.max(0.1, Math.min(0.95, meterVal.f)));
+      const cx = (x0 + x1) / 2 + (x1 - x0) * 0.08, cy = Math.min(y0, y1) - V.rowH * 1.3;
+      const D = 0.62, spin = (x1 >= x0 ? 1 : -1) * Math.PI * 2.5;
+      let t = 0, acc = 0;
+      blip(600, 380, 'sine', 0.04);
+      const fn = (tk) => {
+        if (sp.destroyed || G.view !== V) { app.ticker.remove(fn); if (!sp.destroyed) sp.destroy(); res(); return; }
+        t += tk.deltaMS * (G.qaTimeScale || 1) / 1000;
+        const k = Math.min(1, t / D), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2, u = 1 - e;
+        sp.x = u * u * x0 + 2 * u * e * cx + e * e * x1; sp.y = u * u * y0 + 2 * u * e * cy + e * e * y1;
+        sp.rotation = e * spin;
+        sp.scale.set(s0 * (1 + 0.3 * Math.sin(Math.PI * Math.min(1, k * 2.5))) * (1 - 0.68 * e));
+        acc += tk.deltaMS * (G.qaTimeScale || 1);
+        while (acc > 14) { acc -= 14; FX.nuggetTrail(V, sp.x, sp.y, 1 - 0.5 * e); }
+        if (k >= 1) {
+          app.ticker.remove(fn); sp.destroy();
+          FX.meterSplash(V, x1, y1); FX.shake(V, 3);
+          blip(240, 160, 'sine', 0.09); setTimeout(() => blip(1500, 120, 'triangle', 0.06), 40);
+          res();
+        }
+      };
+      app.ticker.add(fn);
+    });
+  }
+  G.debugNugget = () => { G.forceNext = { floorWipe: true }; return spin(false); };   // QA: force a Nugget Box transformation
   function pressFx(sp) {
     if (!sp) return;
     sp.scale.set(sp.baseScale * 0.9); sp.tint = 0xfff6d0;
@@ -474,13 +541,14 @@
   }
   async function spin(buy) {
     if (!buy) pressFx(G.view && G.view.spinBtn);
-    if (G.busy || Screens.isOpen()) return;
+    if (G.busy || Screens.isOpen() || Help.isOpen()) return;
     const cost = buy ? bet() * E.BUY_COST : bet();
     if (G.balance + 1e-9 < cost) { toast('Not enough balance'); return; }
     if (ac && ac.state === 'suspended') ac.resume();
     G.busy = true; G.balance -= cost; G.lastWin = 0; refresh();
     try {
-      const round = E.playRound(rng, stateFor(), { buy });
+      const force = G.forceNext || undefined; G.forceNext = null;   // QA hook (e.g. { floorWipe: true })
+      const round = E.playRound(rng, stateFor(), { buy, force });
       G.lastRound = round;
       vikingEvent('spin_start');
       await playSpin(round.base);
@@ -509,7 +577,7 @@
     }
   }
   async function buyFlow() {
-    if (G.busy || Screens.isOpen()) return;
+    if (G.busy || Screens.isOpen() || Help.isOpen()) return;
     const cost = bet() * E.BUY_COST;
     if (G.balance + 1e-9 < cost) { toast('Not enough balance'); return; }
     const r = await Screens.show('buyConfirm', { fields: { Buy_desc: `${E.FS_AWARD} FREE SPINS FOR`, Buy_cost: Screens.money(cost) } });
@@ -517,6 +585,7 @@
   }
   G.buyFlow = buyFlow;
   window.addEventListener('keydown', (e) => {
+    if (Help.isOpen()) { if (/^(Space|Escape|Enter|ArrowLeft|ArrowRight)$/.test(e.code)) { e.preventDefault(); Help.key(e); } return; }
     if (e.code !== 'Space') return;
     e.preventDefault();
     if (Screens.isOpen()) Screens.key(); else spin(false);

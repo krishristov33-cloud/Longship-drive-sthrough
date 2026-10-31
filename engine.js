@@ -1,5 +1,16 @@
 /* LONGSHIP IN THE DRIVE-THRU: forked from Lava Aristocrat engine.js (2026-10-31). Only the symbol set,
-   paytable and draw weights were reskinned; RTP is NOT re-tuned (prototype). */
+   paytable and draw weights were reskinned; RTP is NOT re-tuned (prototype, no maths work planned).
+   Longship changes vs Lava (2026-10-31, pass 5, Kris's spec hierarchy):
+     - TRAY (Tray Liner) and VGIRL (Shield-Maiden Cashier) are removed from the game (Kris, same pass).
+     - tiers low J Q K A < mid NUGGETS LONGSHIP KETCHUP < high VMAN WSIGN MEAD (MEAD = top payer);
+       PAYTABLE0 = the old value rows (ascending) mapped onto that order; the old COIN row and the rows of
+       the removed TRAY / VGIRL slots ([.8,1.8,4.5] and [1.5,3.5,12]) are dropped. Their draw weights were
+       spread over the remaining mids / highs (no sims).
+     - Scatter does NOT pay (trigger only). Coin (tier 'coin') never pays or substitutes; it lands for the
+       future Hold the Order feature (not built). Wild subs everything but Scatter and Coin.
+     - FLOOR WIPE = NUGGET BOX TRANSFORMATION: the chosen cell becomes a real NUGGETS symbol (counts in
+       evaluation, can win) instead of the old LOCK blocker; it still pours FW_BOOST into the meter.
+   The Lava notes below describe the base engine; where they differ, the lines above win. */
 /* =========================================================================
    LAVA ARISTOCRAT NIGHT — math engine (single source of truth, no DOM)
    -------------------------------------------------------------------------
@@ -19,12 +30,12 @@
          every win from the forced step on;
        * base game: +1 heat pip, HEAT_MAX pips -> 8 free spins (trigger 'lamp').
    - FLOOR WIPE (base only): random event before evaluating the landed grid:
-     one non-winning, non-wild, non-scatter cell becomes a LOCK fragment
-     (never pays, blocks ways, melts with the next winning cascade) and pours
-     FW_BOOST lava into the lamp at once (mini trail).
-   - Scatter (Lava Fountain): max 1 per reel, never cleared by cascades, counted
-     on the FINAL grid of a spin (where the chain ended). 3/4/5 pay SCATTER_PAYS
-     (x bet, times the spin multiplier) and trigger 8 free spins; in free
+     one non-winning cell (not NUGGETS / wild / scatter / coin) becomes a
+     NUGGETS symbol (counts normally, can win) and pours FW_BOOST lava into
+     the lamp at once (the nugget flies to the meter).
+   - Scatter (Speaker): max 1 per reel, never cleared by cascades, counted
+     on the FINAL grid of a spin (where the chain ended). No pay; 3+
+     trigger 8 free spins; in free
      spins 3+ retrigger +8.
    - FREE SPINS: own reel tables; a smaller TROPHY meter replaces the lamp
      (fresh at 0 each feature); its eruptions add mapMult to a PERSISTENT
@@ -45,44 +56,50 @@
   const pick = (k, v) => (T[k] !== undefined ? T[k] : v);
 
   /* ---------------------------------------------------------------- symbols */
-  const SYMBOLS = ['J', 'Q', 'K', 'A', 'NUGGETS', 'KETCHUP', 'TRAY', 'MEAD', 'LONGSHIP', 'WSIGN', 'VGIRL', 'VMAN', 'COIN', 'W', 'S'];
-  const LOCK = 'LOCK';                        // floor-wipe fragment (no art: drawn by code)
+  const SYMBOLS = ['J', 'Q', 'K', 'A', 'NUGGETS', 'KETCHUP', 'MEAD', 'LONGSHIP', 'WSIGN', 'VMAN', 'COIN', 'W', 'S'];
   const WILD = 'W', SCATTER = 'S';
   const LOWS = ['J', 'Q', 'K', 'A'];
-  const PAYSYMS = ['J', 'Q', 'K', 'A', 'NUGGETS', 'KETCHUP', 'TRAY', 'MEAD', 'LONGSHIP', 'WSIGN', 'VGIRL', 'VMAN', 'COIN'];
+  const COIN = 'COIN';                        // Hold the Order coin: no pay, no substitution (feature not built)
+  /* paying symbols, lowest to highest (spec order) */
+  const PAYSYMS = ['J', 'Q', 'K', 'A', 'NUGGETS', 'LONGSHIP', 'KETCHUP', 'VMAN', 'WSIGN', 'MEAD'];
   const LABELS = {
     J: 'J', Q: 'Q', K: 'K', A: 'A',
-    NUGGETS: 'Nuggets', KETCHUP: 'Ketchup', TRAY: 'Tray', MEAD: 'Mead',
-    LONGSHIP: 'Longship', WSIGN: 'W Sign', VGIRL: 'Viking Girl', VMAN: 'Viking Man', COIN: 'Gold Coin',
-    W: 'Battle-Axe WILD', S: 'Drive-Thru SCATTER', LOCK: 'Spilled Mead',
+    NUGGETS: 'Nugget Box', LONGSHIP: 'Fry-Boat Longship', KETCHUP: 'Ketchup Pump',
+    VMAN: 'Jarl', WSIGN: 'W-Arches', MEAD: 'Mead Barrel',
+    W: 'Battle-Axe Wild', S: 'Speaker Scatter', COIN: 'Cash Coin',
   };
   const TIERS = {
-    J: 'low', Q: 'low', K: 'low', A: 'low', NUGGETS: 'mid', KETCHUP: 'mid', TRAY: 'mid', MEAD: 'mid',
-    LONGSHIP: 'high', WSIGN: 'high', VGIRL: 'high', VMAN: 'high', COIN: 'high', W: 'wild', S: 'scatter',
+    J: 'low', Q: 'low', K: 'low', A: 'low',
+    NUGGETS: 'mid', LONGSHIP: 'mid', KETCHUP: 'mid',
+    VMAN: 'high', WSIGN: 'high', MEAD: 'high',
+    W: 'wild', S: 'scatter', COIN: 'coin',
   };
 
-  /* ------------------------------------------ paytable, x TOTAL bet per way */
+  /* ------------------------------------------ paytable, x TOTAL bet per way
+     The value rows of the first reskin, ascending, mapped onto PAYSYMS (spec order). Untuned. */
   const PAYTABLE0 = T.paytable || {
     J: [0.2, 0.5, 1.2], Q: [0.2, 0.5, 1.2],
     K: [0.25, 0.7, 1.4], A: [0.25, 0.7, 1.4],
-    NUGGETS: [0.5, 1.2, 2.5], KETCHUP: [0.6, 1.3, 3], TRAY: [0.7, 1.4, 3.5], MEAD: [0.8, 1.8, 4.5],
-    LONGSHIP: [1.2, 2.5, 7], WSIGN: [1.3, 3, 9], VGIRL: [1.5, 3.5, 12], VMAN: [2, 5, 20], COIN: [2.5, 7, 35],
+    NUGGETS: [0.5, 1.2, 2.5], LONGSHIP: [0.6, 1.3, 3], KETCHUP: [0.7, 1.4, 3.5],
+    VMAN: [1.2, 2.5, 7], WSIGN: [1.3, 3, 9], MEAD: [2, 5, 20],
   };
   const PAY_SCALE = pick('payScale', 1.5);   // tuning only (bake into the table)
   const PAYTABLE = {};
   for (const k of Object.keys(PAYTABLE0)) PAYTABLE[k] = PAYTABLE0[k].map((v) => Math.round(v * PAY_SCALE * 1e4) / 1e4);
-  const SCATTER_PAYS = T.scatterPays || { 3: 2, 4: 5, 5: 25 };
+  /* Scatter pays nothing (spec): it only triggers / retriggers free spins */
 
   /* ------------------------------------------------- per-reel draw weights
      Independent weighted draw per cell, same table for the landing and for
      the cascade refills of that reel. Max one scatter per reel (enforced at
      draw time). W weight 0 on reel 1 (wild lives on reels 2-5). */
   const BASE_W = T.baseWeights || {
-    J: 15, Q: 15, K: 14, A: 14, NUGGETS: 6, KETCHUP: 6, TRAY: 5, MEAD: 5, LONGSHIP: 4, WSIGN: 3, VGIRL: 3, VMAN: 2, COIN: 2,
+    /* TRAY 5 -> mids (+2 +2 +1), VGIRL 3 -> highs (+1 each) */
+    J: 15, Q: 15, K: 14, A: 14, NUGGETS: 8, KETCHUP: 8, LONGSHIP: 5, MEAD: 6, WSIGN: 4, VMAN: 3, COIN: 2,
     W: 0.978, S: 1.6,
   };
   const FS_W = T.fsWeights || {
-    J: 10, Q: 10, K: 10, A: 10, NUGGETS: 7, KETCHUP: 6, TRAY: 6, MEAD: 5, LONGSHIP: 4, WSIGN: 4, VGIRL: 3, VMAN: 3, COIN: 2,
+    /* TRAY 6 -> mids (+2 each), VGIRL 3 -> highs (+1 each) */
+    J: 10, Q: 10, K: 10, A: 10, NUGGETS: 9, KETCHUP: 8, LONGSHIP: 6, MEAD: 6, WSIGN: 5, VMAN: 4, COIN: 2,
     W: 5.133, S: 1.4,
   };
   /* per-reel scaling of W and S (index = reel) */
@@ -299,14 +316,14 @@
 
   /* Forced cascade (eruption): returns {mask, drops, gridAfter} whose gridAfter
      always holds a win.
-       1. melt mask = step winners + LOCK + low royals; redraw the refill up to 40x
+       1. melt mask = step winners + low royals; redraw the refill up to 40x
        2. melt every non-scatter cell; redraw the whole refill up to 200x
        3. (never seen in 10^8 trials) same full melt with A,A,A dropped on top of reels 1-3 */
   const FALLBACKS = [0, 0, 0];   // QA counter: forced refills resolved by step 1 / 2 / 3
   function forcedRefill(rng, g, mask, tabs) {
     for (let r = 0; r < 5; r++) for (let y = 0; y < 3; y++) {
       const v = g[r][y];
-      if (v === LOCK || LOWS.indexOf(v) >= 0) mask[r][y] = 1;
+      if (LOWS.indexOf(v) >= 0) mask[r][y] = 1;
     }
     let any = false;
     for (let r = 0; r < 5 && !any; r++) for (let y = 0; y < 3; y++) if (mask[r][y]) { any = true; break; }
@@ -394,7 +411,7 @@
     const mask = mask0.map((c) => c.slice());
     for (let r = 0; r < 5; r++) for (let y = 0; y < 3; y++) {
       const v = g[r][y];
-      if (v === LOCK || LOWS.indexOf(v) >= 0) mask[r][y] = 1;
+      if (LOWS.indexOf(v) >= 0) mask[r][y] = 1;
     }
     const drops = forcedDrops(rng, g, mask, tabs, fd, loose);
     const ga = applyGravity(g, mask, drops);
@@ -425,11 +442,13 @@
     if (!fs && !frozen && /*QA-ONLY{*/ !(force.noFloorWipe && !force.floorWipe) && /*}QA-ONLY*/ (force.floorWipe || rng() < FW_P)) {
       const ev = evaluate(g);
       const inWin = maskOf([].concat(...ev.wins.map((w) => w.cells)));
-      const cand = cellsOf(g, (v) => v !== WILD && v !== SCATTER && v !== LOCK).filter((c) => !inWin[c[0]][c[1]]);
+      /* Nugget Box transformation: one non-winning cell that is not already NUGGETS / Wild / Scatter / Coin */
+      const cand = cellsOf(g, (v) => v !== WILD && v !== SCATTER && v !== COIN && v !== 'NUGGETS').filter((c) => !inWin[c[0]][c[1]]);
       if (cand.length) {
         const c = cand[Math.floor(rng() * cand.length)];
-        g[c[0]][c[1]] = LOCK;
-        pending.push({ type: 'floorWipe', cell: [c[0], c[1]] });
+        const from = g[c[0]][c[1]];
+        g[c[0]][c[1]] = 'NUGGETS';
+        pending.push({ type: 'floorWipe', cell: [c[0], c[1]], from, to: 'NUGGETS', boost: FW_BOOST });
         boost = FW_BOOST;
       }
     }
@@ -443,7 +462,6 @@
       const ev = evaluate(g);
       step.wins = ev.wins;
       const mask = maskOf([].concat(...ev.wins.map((w) => w.cells)));
-      if (ev.wins.length) for (const c of cellsOf(g, (v) => v === LOCK)) mask[c[0]][c[1]] = 1;
       const cleared = ev.wins.length ? maskCells(mask).length : 0;
       let fill = frozen ? 0 : boost + (ev.wins.length ? cleared * SHARD_PER_SYMBOL + (idx > 0 ? CASCADE_BONUS : 0) : 0);
       boost = 0;
@@ -495,8 +513,7 @@
           /* chain ends: scatters on the final grid */
           const sc = scatterCells(g);
           if (sc.length >= 3) {
-            step.scatterWin = { count: sc.length, x: SCATTER_PAYS[Math.min(5, sc.length)], cells: sc };
-            waysX = r4(waysX + step.scatterWin.x);
+            step.scatterWin = { count: sc.length, x: 0, cells: sc };   // trigger only, no pay
             if (fs) {
               fsAwarded += RETRIGGER;
               step.events.push({ type: 'retrigger', add: RETRIGGER });
@@ -583,7 +600,7 @@
   function winCents(x, betCents) { return Math.floor(x * betCents + 1e-6); }
 
   const api = {
-    SYMBOLS, LABELS, TIERS, PAYTABLE, SCATTER_PAYS, LOCK, WILD, SCATTER, LOWS, PAYSYMS,
+    SYMBOLS, LABELS, TIERS, PAYTABLE, COIN, WILD, SCATTER, LOWS, PAYSYMS, FW_P, FW_BOOST, SURGE_P,
     REELS: 5, ROWS: 3, WAYS: 243, MAX_WIN, MAX_ERUPT, LAMP_MAX, TROPHY_MAX, HEAT_MAX, FS_AWARD, RETRIGGER, BUY_COST,
     RTP_SHEET,
     DIALS: { BASE_W, FS_W, BASE_WILD_REEL, FS_WILD_REEL, BASE_SCAT_REEL, FS_SCAT_REEL, SHARD_PER_SYMBOL,

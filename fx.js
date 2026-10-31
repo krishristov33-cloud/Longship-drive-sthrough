@@ -339,5 +339,55 @@
   };
   FX.yell = function (V, s = 0.8) { if (V.fxs && V.fxs.viking) V.fxs.viking.yell = s; };
   FX.squash = function (V) { if (V.fxs && V.fxs.viking) { V.fxs.viking.squash = 1; V.fxs.viking.yell = 1.4; } };
+  /* ---------------------------------------------------------- Nugget Box transformation (floor wipe) */
+  T.ring = null;
+  function ringTex() {
+    if (!T.ring) T.ring = canvasTex(128, 128, (g, w) => {
+      const gr = g.createRadialGradient(w / 2, w / 2, w * 0.3, w / 2, w / 2, w / 2);
+      gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.7, 'rgba(255,255,255,0.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, w, w);
+    });
+    return T.ring;
+  }
+  // golden flash + fry-oil smoke + sparkle ring that covers one cell (peak cover at about 0.15-0.3 s)
+  FX.nuggetPuff = function (V, x, y, size) {
+    const S = V.fxs; if (!S) return;
+    const k = size / 200;
+    spawn(S.parts, T.soft, { x, y, life: 0.45, s: 0.8 * k, s1: 3.6 * k, alpha: 1, blend: 'add', tint: 0xffd36a });
+    spawn(S.parts, T.soft, { x, y, life: 0.3, s: 0.5 * k, s1: 2.2 * k, alpha: 1, blend: 'add', tint: 0xffffff });
+    spawn(S.parts, ringTex(), { x, y, life: 0.42, s: 0.3 * k, s1: 2.6 * k, alpha: 0.95, blend: 'add', tint: 0xffc23a });
+    for (let i = 0; i < 9; i++) {           // fry-oil smoke puffs
+      const a = (i / 9) * Math.PI * 2 + R(-0.3, 0.3), d = R(10, 40) * k;
+      spawn(S.parts, T.soft, { x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, vx: Math.cos(a) * R(60, 140) * k, vy: Math.sin(a) * R(60, 140) * k - 40 * k,
+        drag: 2.5, life: R(0.45, 0.65), s: R(0.9, 1.3) * k, s1: R(1.8, 2.4) * k, alpha: 0.85, tint: [0xe8c98a, 0xd9b26a, 0xf3dfb0][i % 3] });
+    }
+    for (let i = 0; i < 16; i++) {          // sparkle ring
+      const a = (i / 16) * Math.PI * 2, sp = R(380, 560) * k;
+      spawn(S.parts, T.star, { x: x + Math.cos(a) * 30 * k, y: y + Math.sin(a) * 30 * k, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 4,
+        life: R(0.4, 0.6), s: R(0.5, 0.8) * k, s1: 0.1, vr: R(-6, 6), blend: 'add', tint: i % 2 ? 0xfff0a0 : 0xffb52e });
+    }
+    for (let i = 0; i < 8; i++) {           // a few crumbs
+      const a = R(0, Math.PI * 2), sp = R(200, 380) * k;
+      spawn(S.parts, T.nugget, { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 160 * k, g: 1100, life: R(0.5, 0.7), s: R(0.25, 0.4) * k, s1: 0.15, vr: R(-10, 10), rot: R(0, 6) });
+    }
+  };
+  // one trail tick for the flying nugget (crumbs + sparks)
+  FX.nuggetTrail = function (V, x, y, k = 1) {
+    const S = V.fxs; if (!S) return;
+    spawn(S.parts, T.dot, { x: x + R(-6, 6), y: y + R(-6, 6), vx: R(-30, 30), vy: R(-20, 40), g: 300, life: R(0.3, 0.5), s: R(0.35, 0.6) * k, s1: 0.05, tint: Math.random() < 0.5 ? 0xd88a1e : 0xf5c64a });
+    if (Math.random() < 0.6) spawn(S.parts, T.star, { x, y, vx: R(-50, 50), vy: R(-50, 50), life: R(0.25, 0.4), s: R(0.25, 0.45) * k, s1: 0.05, vr: R(-8, 8), blend: 'add', tint: 0xffe08a });
+  };
+  // the nugget lands in the Mead Meter: splash + glow pulse
+  FX.meterSplash = function (V, x, y) {
+    const S = V.fxs; if (!S) return;
+    spawn(S.parts, T.soft, { x, y, life: 0.5, s: 0.4, s1: 2.6, alpha: 1, blend: 'add', tint: 0xffb020 });
+    spawn(S.parts, ringTex(), { x, y, life: 0.4, s: 0.2, s1: 1.4, alpha: 0.9, blend: 'add', tint: 0xffe9a0 });
+    for (let i = 0; i < 12; i++) {
+      const a = -Math.PI / 2 + R(-1.1, 1.1), sp = R(180, 360);
+      spawn(S.parts, T.drop, { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 1200, life: R(0.45, 0.7), s: R(0.3, 0.5), s1: 0.15, tint: 0xff9a14, rot: a + Math.PI / 2 });
+    }
+    S.whoosh = 1.4;   // meter glow pulse (decays in update)
+  };
+  FX.textures = T;
   window.LDTFX = FX;
 })();
