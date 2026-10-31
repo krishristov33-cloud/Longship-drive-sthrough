@@ -58,7 +58,7 @@
  "animations": {
   "idle_breathe": {
    "loop": true,
-   "duration": 4,
+   "duration": 4.0,
    "kind": "idle",
    "game_event": "IDLE (weight 60)",
    "when": "Default idle. Rotate with idle_bored / idle_look_reels.",
@@ -68,7 +68,7 @@
   },
   "idle_bored": {
    "loop": true,
-   "duration": 6,
+   "duration": 6.0,
    "kind": "idle",
    "game_event": "IDLE (weight 20)",
    "when": "Idle variant after ~8 s with no spin: sigh, looks around, drums fingers on the sill.",
@@ -78,7 +78,7 @@
   },
   "idle_look_reels": {
    "loop": true,
-   "duration": 4,
+   "duration": 4.0,
    "kind": "idle",
    "game_event": "REELS_SPINNING / IDLE (weight 20)",
    "when": "While the reels are spinning (between spin_start and reels_stop) and as a rare idle.",
@@ -103,7 +103,7 @@
   },
   "anticipation": {
    "loop": true,
-   "duration": 2,
+   "duration": 2.0,
    "kind": "event",
    "game_event": "SCATTER_ANTICIPATION (2 scatters landed)",
    "when": "When 2 Scatters have landed and the remaining reels are still spinning (loop until reels stop).",
@@ -128,7 +128,7 @@
   },
   "win_big": {
    "loop": false,
-   "duration": 3,
+   "duration": 3.0,
    "kind": "event",
    "game_event": "WIN_BIG",
    "when": "Big/mega win (>= 10x bet): roar, handset raised like a fist, slams the sill, mead spray.",
@@ -138,11 +138,11 @@
      "name": "roar"
     },
     {
-     "time": 0.9333,
-     "name": "slam"
+     "time": 0.6,
+     "name": "fist_up"
     },
     {
-     "time": 1.2667,
+     "time": 2.4667,
      "name": "slam"
     }
    ],
@@ -170,7 +170,7 @@
   },
   "free_spins_cheer": {
    "loop": true,
-   "duration": 2,
+   "duration": 2.0,
    "kind": "loop",
    "game_event": "FREE_SPINS_ACTIVE",
    "when": "Loop for the whole free-spins round (between spins too).",
@@ -178,6 +178,10 @@
     {
      "time": 0,
      "name": "chant"
+    },
+    {
+     "time": 0,
+     "name": "fist_up"
     },
     {
      "time": 0.5,
@@ -224,5 +228,5 @@
  "skins": [
   "default"
  ],
- "updated": "2026-10-31 02:13"
+ "updated": "2026-10-31 02:19"
 }

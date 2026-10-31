@@ -6,3 +6,4 @@ Origin = bottom-centre of the layout Viking box; root bone carries scale 0.4898,
 Default: idle_breathe. Default mix 0.25 s. Event clips play through, then back to idle_breathe.
 Validated with the official spine-core 4.2.100 runtime: loads OK, every clip first frame == last frame (loopDiff 0).
 Refinement continues in place until ~02:50 (same file names; just reload).
+Updated 02:20: left raised-fist swap (painted, from fal hands sheet) in win_big / scatter_trigger / free_spins_cheer; scatter spray removed (kept FX off the face). Same file names.
