@@ -31,6 +31,11 @@
   for (const a of Object.values(ART)) urls.add('assets/symbols/' + a + '.png');
   await PIXI.Assets.load([...urls]);
   await loadSpine();
+  const Screens = window.LDTScreens;
+  await Screens.init({ app, view: () => G.view, tween: (o, to, ms) => tween(o, to, ms), blip: (f) => blip(f, 160, 'triangle', 0.06),
+    vikingVisible: (v) => { if (G.view && G.view.viking) G.view.viking.visible = v; },
+    onTier: () => { FX.shake(G.view, 12); blip(1200, 220, 'square', 0.05); } }, DATA && DATA.screens);
+  G.screens = Screens;
   document.getElementById('loading').remove();
 
   /* ------------------------------------------------------------ spine */
@@ -170,6 +175,7 @@
     V.toast.anchor.set(0.5); V.toast.position.set(V.win.x + V.win.w / 2, V.win.y - 28); V.toast.alpha = 0;
     root.addChild(V.toast);
     FX.build(V, L);
+    V.screenLayer = new PIXI.Container(); root.addChild(V.screenLayer);   // Aiko's splash / win screens
     return V;
   }
 
@@ -199,7 +205,7 @@
       case 'Logo': V.logo = sp; V.logoLayer = l; break;
       case 'Viking': V.viking = sp; sp.anchor.set(0.5, 1); sp.position.set(l.x + l.w / 2, l.y + l.h); break;
       case 'Spin_Button': V.spinBtn = sp; V.spinIcon = sp; button(sp, () => spin(false)); break;
-      case 'Buy_Bonus': button(sp, () => spin(true)); break;
+      case 'Buy_Bonus': button(sp, () => buyFlow()); break;
       case 'Sound_Button_1': V.sfxBtn = sp; button(sp, () => { G.sfx = !G.sfx; refresh(); blip(660); }); break;
       case 'Sound_Button_2': V.musicBtn = sp; button(sp, () => { G.music = !G.music; refresh(); }); break;
       case 'Bet_Arrow_L': button(sp, () => setBet(-1)); break;
@@ -271,7 +277,7 @@
   }
   function onResize() {
     const o = pickOrient();
-    if (o !== G.orient && !G.busy) setOrient(o); else fit();
+    if (o !== G.orient && !G.busy && !Screens.isOpen()) setOrient(o); else fit();
   }
   window.addEventListener('resize', () => setTimeout(onResize, 30));
 
@@ -446,8 +452,8 @@
       if (step.lamp) setMeter(step.lamp.after / step.lamp.max, null);
       for (const ev of step.events || []) {
         if (ev.type === 'eruption') await banner(`MEAD OVERFLOW!  x${ev.multAfter}`, 900);
-        else if (ev.type === 'fsTrigger') vikingEvent('scatter_trigger'), await banner(`${E.FS_AWARD} FREE SPINS!`, 900);
-        else if (ev.type === 'retrigger') await banner(`+${ev.add} FREE SPINS`, 700);
+        else if (ev.type === 'fsTrigger') vikingEvent('scatter_trigger');          // the fsTrigger screen follows the base spin
+        else if (ev.type === 'retrigger') await Screens.show('retrigger', { fields: { FS_add: '+' + ev.add } });
         else if (ev.type === 'lavaSurge') toast('MEAD SURGE!');
       }
       if (step.removed && step.removed.length && step.gridAfter) await cascade(step);
@@ -460,7 +466,7 @@
   }
   async function spin(buy) {
     if (!buy) pressFx(G.view && G.view.spinBtn);
-    if (G.busy) return;
+    if (G.busy || Screens.isOpen()) return;
     const cost = buy ? bet() * E.BUY_COST : bet();
     if (G.balance + 1e-9 < cost) { toast('Not enough balance'); return; }
     if (ac && ac.state === 'suspended') ac.resume();
@@ -469,12 +475,14 @@
       const round = E.playRound(rng, stateFor(), { buy });
       G.lastRound = round;
       vikingEvent('spin_start');
-      if (buy) await banner('BONUS BOUGHT!', 600);
       await playSpin(round.base);
       if (round.feature) {
         const f = round.feature;
-        await banner(`FREE SPINS x${f.spins.length}`, 900);
+        vikingEvent('free_spins_cheer');
+        await Screens.show('fsTrigger', { fields: { FS_count: String(f.awarded || E.FS_AWARD) }, hideViking: true });
         for (let i = 0; i < f.spins.length; i++) await playSpin(f.spins[i], `FS ${i + 1}/${f.spins.length}`);
+        const fsWin = E.winCents(f.totalX, Math.round(bet() * 100)) / 100;
+        await Screens.show('fsOutro', { count: { FS_total: { to: fsWin } }, fields: { FS_spins: `IN ${f.spins.length} FREE SPINS` }, hideViking: true });
       }
       const win = E.winCents(round.totalX, Math.round(bet() * 100)) / 100;
       G.lastWin = win; G.balance += win;
@@ -484,7 +492,7 @@
         vikingEvent('win_big'); FX.shake(G.view, 16);
         const V = G.view; for (let i = 0; i < 10; i++) setTimeout(() => G.view === V && FX.burst(V, V.win.x + Math.random() * V.win.w, V.win.y + Math.random() * V.win.h, 16), i * 120);
       }
-      if (round.bigWinTier) await banner(round.bigWinTier.toUpperCase() + ' WIN!\n' + money(win), 1600);
+      if (round.bigWinTier) await Screens.bigWin(win, bet());
       else if (win > 0) toast('TOTAL WIN ' + money(win), 1400);
     } finally {
       G.busy = false;
@@ -492,12 +500,25 @@
       if (pickOrient() !== G.orient) setOrient(pickOrient());
     }
   }
-  window.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); spin(false); } });
+  async function buyFlow() {
+    if (G.busy || Screens.isOpen()) return;
+    const cost = bet() * E.BUY_COST;
+    if (G.balance + 1e-9 < cost) { toast('Not enough balance'); return; }
+    const r = await Screens.show('buyConfirm', { fields: { Buy_desc: `${E.FS_AWARD} FREE SPINS FOR`, Buy_cost: Screens.money(cost) } });
+    if (r === 'Confirm') spin(true);
+  }
+  G.buyFlow = buyFlow;
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space') return;
+    e.preventDefault();
+    if (Screens.isOpen()) Screens.key(); else spin(false);
+  });
 
   /* ------------------------------------------------------------ start */
   G.grid = E.playRound(E.makeRng(3), E.newState()).base.grid;   // a cosmetic opening grid
   setOrient(pickOrient());
   G.spinFn = spin;
   G.ready = true;
+  Screens.show('intro', { fields: { FS_desc: `3+ SCATTERS = ${E.FS_AWARD} FREE SPINS`, Buy_desc: `INSTANT FEATURE: ${E.BUY_COST}x BET` } });
   console.log('Spine status', G.spineStatus);
 })();

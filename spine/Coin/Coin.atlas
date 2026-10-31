@@ -1,9 +1,9 @@
 Coin.png
 size:1024,1024
 filter:Linear,Linear
-art
+rim
 bounds:2,2,306,388
-flash
+coin
 bounds:310,2,306,388
 rays
 bounds:618,2,256,256
@@ -11,7 +11,11 @@ glow
 bounds:876,2,128,128
 ring
 bounds:2,392,128,128
+shine
+bounds:132,392,48,128
+text
+bounds:182,392,191,118
 flare
-bounds:132,392,96,96
+bounds:375,392,96,96
 spark
-bounds:230,392,48,48
+bounds:473,392,48,48
