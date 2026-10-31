@@ -138,6 +138,22 @@
     } catch (e) { /* audio optional */ }
   }
 
+  /* ------------------------------------------------------------ music (Aiko's track, assets/music/longship_bgm.mp3) */
+  const bgm = new Audio('assets/music/longship_bgm.mp3');
+  bgm.loop = true; bgm.volume = 0.45; bgm.preload = 'auto';
+  G.bgm = bgm;
+  function syncMusic() {
+    if (G.music && G.gestured) { const p = bgm.play(); if (p && p.catch) p.catch(() => {}); }
+    else bgm.pause();
+  }
+  G.syncMusic = syncMusic;
+  const firstGesture = () => {   // browsers only allow audio after a click / key / touch
+    G.gestured = true; syncMusic();
+    for (const ev of ['pointerdown', 'keydown', 'touchstart']) window.removeEventListener(ev, firstGesture, true);
+  };
+  for (const ev of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(ev, firstGesture, true);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) bgm.pause(); else syncMusic(); });
+
   /* ------------------------------------------------------------ view build */
   const TXT = (size, fill = '#ffd75a', family = 'Oswald') => new PIXI.TextStyle({ fontFamily: family, fontSize: size, fill,
     stroke: { color: '#1a0e08', width: Math.max(2, size / 9) }, fontWeight: '700' });
@@ -219,7 +235,7 @@
       case 'Spin_Button': V.spinBtn = sp; V.spinIcon = sp; button(sp, () => spin(false)); break;
       case 'Buy_Bonus': button(sp, () => buyFlow()); break;
       case 'Sound_Button_1': V.sfxBtn = sp; button(sp, () => { G.sfx = !G.sfx; refresh(); blip(660); }); break;
-      case 'Sound_Button_2': V.musicBtn = sp; button(sp, () => { G.music = !G.music; refresh(); }); break;
+      case 'Sound_Button_2': V.musicBtn = sp; button(sp, () => { G.music = !G.music; syncMusic(); refresh(); }); break;
       case 'Bet_Arrow_L': button(sp, () => setBet(-1)); break;
       case 'Bet_Arrow_R': button(sp, () => setBet(1)); break;
       case 'Icon_Home': button(sp, () => toast('Home (prototype)')); break;
