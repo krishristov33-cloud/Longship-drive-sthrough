@@ -1,0 +1,228 @@
+{
+ "character": "Viking (Jarl at the drive-thru window)",
+ "game": "Longship in the Drive-Thru",
+ "format": "Spine 4.2 JSON",
+ "spine": "4.2.40",
+ "fps": 30,
+ "files": {
+  "json": "spine/Viking.json",
+  "atlas": "spine/Viking.atlas",
+  "pages": [
+   "spine/Viking.png"
+  ]
+ },
+ "origin": "skeleton origin = bottom-centre of the Viking layout box (root bone carries scale 0.4898 so 1 unit = 1 landscape px)",
+ "placement": {
+  "Landscape": {
+   "layout_box": [
+    -46,
+    209,
+    408,
+    561
+   ],
+   "x": 158.0,
+   "y": 770,
+   "scale": 1.0,
+   "note": "screen px, y down: put the skeleton origin at (x, y), skeleton scale = scale (y flipped per runtime)"
+  },
+  "Portrait": {
+   "layout_box": [
+    -91,
+    384,
+    333,
+    458
+   ],
+   "x": 75.5,
+   "y": 842,
+   "scale": 0.81618,
+   "note": "screen px, y down: put the skeleton origin at (x, y), skeleton scale = scale (y flipped per runtime)"
+  }
+ },
+ "default_animation": "idle_breathe",
+ "mix": {
+  "default": 0.25,
+  "to_idle": 0.3,
+  "from_spin_start": 0.2,
+  "anticipation_in": 0.3,
+  "free_spins_cheer_in": 0.3,
+  "note": "Use AnimationStateData default mix 0.25 s; every clip blends back to idle_breathe."
+ },
+ "state_machine": {
+  "IDLE": "loop idle_breathe; after each loop pick weighted: idle_breathe 60, idle_bored 20, idle_look_reels 20",
+  "SPIN_PRESS": "play spin_start (track 0, no loop) then queue idle_look_reels (loop) until reels stop",
+  "SCATTER_ANTICIPATION": "set anticipation (loop) when the 2nd Scatter lands; leave on reels stop",
+  "RESULT": "WIN_BIG -> win_big ; WIN_SMALL -> win_small ; LOSE -> lose_grumble with p=0.33 else idle ; then queue idle_breathe",
+  "FREE_SPINS_TRIGGER": "scatter_trigger, then queue free_spins_cheer (loop) for the whole round; spin_start still plays on each FS spin, then back to free_spins_cheer",
+  "rule": "event clips always play through (never cut by the idle picker); a new game event may interrupt with the mix time"
+ },
+ "animations": {
+  "idle_breathe": {
+   "loop": true,
+   "duration": 4,
+   "kind": "idle",
+   "game_event": "IDLE (weight 60)",
+   "when": "Default idle. Rotate with idle_bored / idle_look_reels.",
+   "spine_events": [],
+   "returns_to": "idle_breathe",
+   "preview": "preview/idle_breathe.gif"
+  },
+  "idle_bored": {
+   "loop": true,
+   "duration": 6,
+   "kind": "idle",
+   "game_event": "IDLE (weight 20)",
+   "when": "Idle variant after ~8 s with no spin: sigh, looks around, drums fingers on the sill.",
+   "spine_events": [],
+   "returns_to": "idle_breathe",
+   "preview": "preview/idle_bored.gif"
+  },
+  "idle_look_reels": {
+   "loop": true,
+   "duration": 4,
+   "kind": "idle",
+   "game_event": "REELS_SPINNING / IDLE (weight 20)",
+   "when": "While the reels are spinning (between spin_start and reels_stop) and as a rare idle.",
+   "spine_events": [],
+   "returns_to": "idle_breathe",
+   "preview": "preview/idle_look_reels.gif"
+  },
+  "spin_start": {
+   "loop": false,
+   "duration": 1.6,
+   "kind": "event",
+   "game_event": "SPIN_PRESS",
+   "when": "Every spin press: yells the order into the intercom.",
+   "spine_events": [
+    {
+     "time": 0.4,
+     "name": "yell"
+    }
+   ],
+   "returns_to": "idle_breathe",
+   "preview": "preview/spin_start.gif"
+  },
+  "anticipation": {
+   "loop": true,
+   "duration": 2,
+   "kind": "event",
+   "game_event": "SCATTER_ANTICIPATION (2 scatters landed)",
+   "when": "When 2 Scatters have landed and the remaining reels are still spinning (loop until reels stop).",
+   "spine_events": [],
+   "returns_to": "idle_breathe",
+   "preview": "preview/anticipation.gif"
+  },
+  "win_small": {
+   "loop": false,
+   "duration": 1.8,
+   "kind": "event",
+   "game_event": "WIN_SMALL",
+   "when": "Win below big-win threshold (e.g. < 10x bet): smug nod.",
+   "spine_events": [
+    {
+     "time": 0.2667,
+     "name": "smug"
+    }
+   ],
+   "returns_to": "idle_breathe",
+   "preview": "preview/win_small.gif"
+  },
+  "win_big": {
+   "loop": false,
+   "duration": 3,
+   "kind": "event",
+   "game_event": "WIN_BIG",
+   "when": "Big/mega win (>= 10x bet): roar, handset raised like a fist, slams the sill, mead spray.",
+   "spine_events": [
+    {
+     "time": 0.5333,
+     "name": "roar"
+    },
+    {
+     "time": 0.9333,
+     "name": "slam"
+    },
+    {
+     "time": 1.2667,
+     "name": "slam"
+    }
+   ],
+   "returns_to": "idle_breathe",
+   "preview": "preview/win_big.gif"
+  },
+  "scatter_trigger": {
+   "loop": false,
+   "duration": 2.4,
+   "kind": "event",
+   "game_event": "FREE_SPINS_TRIGGER",
+   "when": "3+ Scatters trigger free spins: shock, then excitement. Then queue free_spins_cheer.",
+   "spine_events": [
+    {
+     "time": 0.1,
+     "name": "gasp"
+    },
+    {
+     "time": 1.0,
+     "name": "cheer"
+    }
+   ],
+   "returns_to": "idle_breathe",
+   "preview": "preview/scatter_trigger.gif"
+  },
+  "free_spins_cheer": {
+   "loop": true,
+   "duration": 2,
+   "kind": "loop",
+   "game_event": "FREE_SPINS_ACTIVE",
+   "when": "Loop for the whole free-spins round (between spins too).",
+   "spine_events": [
+    {
+     "time": 0,
+     "name": "chant"
+    },
+    {
+     "time": 0.5,
+     "name": "chant"
+    },
+    {
+     "time": 1.0,
+     "name": "chant"
+    },
+    {
+     "time": 1.5,
+     "name": "chant"
+    }
+   ],
+   "returns_to": "idle_breathe",
+   "preview": "preview/free_spins_cheer.gif"
+  },
+  "lose_grumble": {
+   "loop": false,
+   "duration": 2.4,
+   "kind": "event",
+   "game_event": "SPIN_LOSE (chance 0.33)",
+   "when": "On some losing spins (suggest 1 in 3, never twice in a row): eye roll and mutter.",
+   "spine_events": [
+    {
+     "time": 1.2667,
+     "name": "mutter"
+    }
+   ],
+   "returns_to": "idle_breathe",
+   "preview": "preview/lose_grumble.gif"
+  }
+ },
+ "events": {
+  "yell": "spin_start shout (VO hook)",
+  "smug": "win_small hmph",
+  "roar": "win_big roar",
+  "slam": "fist slams sill (thud + small screen shake)",
+  "gasp": "scatter_trigger gasp",
+  "cheer": "scatter_trigger cheer",
+  "chant": "free_spins_cheer beat (4 per loop)",
+  "mutter": "lose_grumble mutter"
+ },
+ "skins": [
+  "default"
+ ],
+ "updated": "2026-10-31 02:13"
+}

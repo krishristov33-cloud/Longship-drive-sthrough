@@ -1,0 +1,8 @@
+READY - Viking character (Longship in the Drive-Thru)  first usable export 2026-10-31 02:13
+Spine 4.2 JSON + atlas + PNG: spine/Viking.json, spine/Viking.atlas, spine/Viking.png
+manifest.json: 10 animations (loop flag, duration, game event, spine events, mix times, placement for Landscape/Portrait).
+Origin = bottom-centre of the layout Viking box; root bone carries scale 0.4898, so 1 skeleton unit = 1 landscape px.
+  Landscape: origin at screen (158, 770), scale 1.0.  Portrait: origin at (75.5, 842), scale 0.81618.
+Default: idle_breathe. Default mix 0.25 s. Event clips play through, then back to idle_breathe.
+Validated with the official spine-core 4.2.100 runtime: loads OK, every clip first frame == last frame (loopDiff 0).
+Refinement continues in place until ~02:50 (same file names; just reload).

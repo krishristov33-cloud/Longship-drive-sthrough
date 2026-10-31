@@ -36,6 +36,12 @@
     vikingVisible: (v) => { if (G.view && G.view.viking) G.view.viking.visible = v; },
     onTier: () => { FX.shake(G.view, 12); blip(1200, 220, 'square', 0.05); } }, DATA && DATA.screens);
   G.screens = Screens;
+  // Viking rig (Animoto): character/manifest.json; static sprite + code tweens until it exists
+  try {
+    const cman = DATA ? DATA.character : await fetch('character/manifest.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (cman) await window.LDTViking.load('character/', cman);
+  } catch (e) { console.warn('viking', e); }
+  G.vikingStatus = () => window.LDTViking.status;
   document.getElementById('loading').remove();
 
   /* ------------------------------------------------------------ spine */
@@ -203,7 +209,7 @@
       case 'Background': V.bgSprite = sp; V.bgLayer = l; break;
       case 'Reel_Frame': V.frameSprite = sp; V.frameLayer = l; break;
       case 'Logo': V.logo = sp; V.logoLayer = l; break;
-      case 'Viking': V.viking = sp; sp.anchor.set(0.5, 1); sp.position.set(l.x + l.w / 2, l.y + l.h); break;
+      case 'Viking': V.viking = sp; V.vikingLayer = l; sp.anchor.set(0.5, 1); sp.position.set(l.x + l.w / 2, l.y + l.h); break;
       case 'Spin_Button': V.spinBtn = sp; V.spinIcon = sp; button(sp, () => spin(false)); break;
       case 'Buy_Bonus': button(sp, () => buyFlow()); break;
       case 'Sound_Button_1': V.sfxBtn = sp; button(sp, () => { G.sfx = !G.sfx; refresh(); blip(660); }); break;
@@ -273,6 +279,7 @@
   function setOrient(o) {
     if (G.view) { G.view.root.destroy({ children: true }); }
     G.orient = o; G.view = buildView(o); app.stage.addChild(G.view.root);
+    G.vikingSpine = window.LDTViking.attach(G.view);   // null until Animoto's rig is loaded
     placeGrid(G.view, G.grid); refresh(); fit();
   }
   function onResize() {
@@ -427,6 +434,7 @@
   }
   async function playSpin(sp, label) {
     await land(sp.grid);
+    vikingEvent('reels_stop');
     let shown = 0, cascades = 0;
     for (const step of sp.steps) {
       syncGrid(step.grid);
@@ -437,7 +445,7 @@
         const from = shown; shown += step.x; cascades++;
         highlight(cells);
         if (cascades >= 2) FX.shake(G.view, Math.min(14, 4 + cascades * 2));
-        vikingEvent('win_small');
+        if (!label && cascades === 1) vikingEvent('win_small');
         blip(660, 140, 'triangle', 0.08); setTimeout(() => blip(990, 160), 120);
         const pre = (label ? label + '  ' : '') + (step.mult > 1 ? `x${step.mult}  ` : '') + 'WIN ';
         const cnt = { v: from };
@@ -478,16 +486,16 @@
       await playSpin(round.base);
       if (round.feature) {
         const f = round.feature;
-        vikingEvent('free_spins_cheer');
         await Screens.show('fsTrigger', { fields: { FS_count: String(f.awarded || E.FS_AWARD) }, hideViking: true });
-        for (let i = 0; i < f.spins.length; i++) await playSpin(f.spins[i], `FS ${i + 1}/${f.spins.length}`);
+        vikingEvent('free_spins_cheer');                 // loops through the free spins
+        for (let i = 0; i < f.spins.length; i++) { vikingEvent('spin_start'); await playSpin(f.spins[i], `FS ${i + 1}/${f.spins.length}`); }
+        vikingEvent('free_spins_end');
         const fsWin = E.winCents(f.totalX, Math.round(bet() * 100)) / 100;
         await Screens.show('fsOutro', { count: { FS_total: { to: fsWin } }, fields: { FS_spins: `IN ${f.spins.length} FREE SPINS` }, hideViking: true });
       }
       const win = E.winCents(round.totalX, Math.round(bet() * 100)) / 100;
       G.lastWin = win; G.balance += win;
-      if (round.feature) vikingEvent('free_spins_cheer');
-      if (win === 0) vikingEvent('lose_grumble');
+      if (win === 0 && Math.random() < 0.33) vikingEvent('lose_grumble');   // manifest: p = 0.33
       if (round.bigWinTier) {
         vikingEvent('win_big'); FX.shake(G.view, 16);
         const V = G.view; for (let i = 0; i < 10; i++) setTimeout(() => G.view === V && FX.burst(V, V.win.x + Math.random() * V.win.w, V.win.y + Math.random() * V.win.h, 16), i * 120);
