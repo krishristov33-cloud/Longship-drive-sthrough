@@ -8,8 +8,10 @@
   const ART = { J: 'J', Q: 'Q', K: 'K', A: 'A', NUGGETS: 'Nuggets', KETCHUP: 'Ketchup', MEAD: 'Mead',
     LONGSHIP: 'Longship', WSIGN: 'W', VMAN: 'VikingMan', COIN: 'Coin', W: 'Wild', S: 'Scatter' };
   const BETS = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+  const TURBO = 2;   // turbo plays the whole presentation at 2x
   const ROYAL_SCALE = { J: 0.84, Q: 0.84, K: 0.74, A: 0.84 };   // royals read smaller; K's chunky pickle needs extra (Kris)
-  const G = { balance: 1000, betIdx: 2, lastWin: 0, busy: false, sfx: true, music: true, grid: null, states: {},
+  const G = { balance: 1000, betIdx: 2, lastWin: 0, busy: false, sfx: true, music: true, sound: true, turbo: false, auto: false,
+    autoCount: 0, grid: null, states: {},
     view: null, orient: null, spine: {}, spineStatus: {} };
   window.LDT = G;   // debug handle
   const rng = E.makeRng((Date.now() ^ 0x5bd1e995) >>> 0);
@@ -110,9 +112,11 @@
       tweens.add({ obj, from, to, ms, t: 0, ease: EASE[ease], res });
     });
   }
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const fast = () => G.turbo || G.holdTurbo;
+  const speed = () => (G.qaTimeScale || 1) * (fast() ? TURBO : 1);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms / (fast() ? TURBO : 1)));
   app.ticker.add((tk) => {
-    const dt = tk.deltaMS * (G.qaTimeScale || 1);   // QA slow motion (unset in play)
+    const dt = tk.deltaMS * speed();   // turbo x2, QA slow motion
     for (const tw of tweens) {
       tw.t += dt; const k = Math.min(1, tw.t / tw.ms), e = tw.ease(k);
       if (tw.obj.destroyed) { tweens.delete(tw); tw.res(); continue; }
@@ -200,6 +204,7 @@
       root.addChild(sp);
       wire(V, l, sp);
     }
+    addControls(V);
     V.fx = new PIXI.Container(); root.addChild(V.fx);
     V.banner = new PIXI.Text({ text: '', style: TXT(orient === 'portrait' ? 84 : 96, '#ffd75a', 'Lilita One') });
     V.banner.anchor.set(0.5); V.banner.position.set(V.win.x + V.win.w / 2, V.win.y + V.win.h / 2); V.banner.alpha = 0;
@@ -210,6 +215,98 @@
     FX.build(V, L);
     V.screenLayer = new PIXI.Container(); root.addChild(V.screenLayer);   // Aiko's splash / win screens
     return V;
+  }
+
+  /* ---------------- Sound / Turbo / Auto row (code-drawn in the sound button's style; no art for Auto / Turbo yet) */
+  const CTRL = { landscape: { y: 905, xs: [1682, 1772, 1862], d: 80 }, portrait: { y: 1642, xs: [742, 862, 982], d: 84 } };
+  function roundBtn(V, x, y, d, drawIcon) {
+    const c = new PIXI.Container(); c.position.set(x, y);
+    const r = d / 2;
+    const ring = new PIXI.Graphics().circle(0, 0, r + 6).fill({ color: 0xffc23a, alpha: 0 }); c.addChild(ring);
+    c.addChild(new PIXI.Graphics().circle(0, 0, r).fill(0x2a120a).circle(0, 0, r - 5).fill(0x6e1f19)
+      .circle(0, -2, r - 9).fill(0x9a3027).ellipse(0, -r * 0.45, r * 0.55, r * 0.22).fill({ color: 0xffffff, alpha: 0.08 }));
+    const icon = new PIXI.Container(); c.addChild(icon);
+    c.draw = (on) => { icon.removeChildren().forEach((n) => n.destroy()); drawIcon(icon, r, on ? 0xffd75a : 0xead6b4, on); };
+    c.setOn = (on) => { c.on_ = on; c.draw(on); ring.alpha = on ? 1 : 0; };
+    c.ring = ring; c.baseScale = 1;
+    c.draw(false);
+    V.root.addChild(c);
+    return c;
+  }
+  function addControls(V) {
+    const P = CTRL[V.orient];
+    if (V.sfxBtn) {   // the single sound button moves to the end of the row
+      const s = (P.d / V.sfxBtn.texture.width); V.sfxBtn.position.set(P.xs[2], P.y); V.sfxBtn.scale.set(s); V.sfxBtn.baseScale = s;
+    }
+    V.turboBtn = roundBtn(V, P.xs[1], P.y, P.d, (ic, r, col) => {   // lightning bolt
+      const k = r / 40;
+      ic.addChild(new PIXI.Graphics().poly([4, -26, -14, 4, -1, 4, -6, 26, 14, -6, 1, -6, 6, -26].map((v) => v * k)).fill(col)
+        .stroke({ color: 0x2a120a, width: 2 }));
+    });
+    button(V.turboBtn, () => { G.turbo = !G.turbo; blip(G.turbo ? 1200 : 700, 90, 'square', 0.05); refresh(); toast(G.turbo ? 'TURBO ON' : 'TURBO OFF', 900); });
+    V.autoBtn = roundBtn(V, P.xs[0], P.y, P.d, (ic, r, col, on) => {   // circular arrows + AUTO / STOP
+      const k = r / 40;
+      const g = new PIXI.Graphics();
+      g.arc(0, 0, 25 * k, -2.6, 0.3).stroke({ color: col, width: 5 * k, cap: 'round' });
+      g.arc(0, 0, 25 * k, 0.55, 2.9).stroke({ color: col, width: 5 * k, cap: 'round' });
+      g.poly([25 * k * Math.cos(0.3) + 7 * k, 25 * k * Math.sin(0.3) - 6 * k, 25 * k * Math.cos(0.3) - 7 * k, 25 * k * Math.sin(0.3) - 2 * k,
+        25 * k * Math.cos(0.3) + 2 * k, 25 * k * Math.sin(0.3) + 9 * k]).fill(col);
+      ic.addChild(g);
+      const t = new PIXI.Text({ text: on ? 'STOP' : 'AUTO', style: new PIXI.TextStyle({ fontFamily: 'Lilita One', fontSize: Math.round(15 * k), fill: col,
+        stroke: { color: 0x2a120a, width: 3 } }) });
+      t.anchor.set(0.5); ic.addChild(t);
+    });
+    button(V.autoBtn, () => (G.auto ? stopAuto() : startAuto()));
+  }
+  /* hold the Spin button (> 0.45 s): turbo spins back to back until it is released; a tap is still one spin */
+  const HOLD_MS = 450;
+  function spinHold(sp) {
+    let timer = null, down = false;
+    sp.on('pointerdown', () => {
+      down = true; clearTimeout(timer);
+      if (G.auto) return;                                   // the tap stops autospin instead
+      timer = setTimeout(() => { if (down && !G.holding) { G.holding = true; G.holdTurbo = true; refresh(); toast('TURBO HOLD', 700); holdLoop(); } }, HOLD_MS);
+    });
+    const up = () => {
+      down = false; clearTimeout(timer);
+      if (G.holding) { G.holding = false; G.holdTurbo = false; sp.skipTap = true; refresh(); }
+    };
+    sp.on('pointerup', up); sp.on('pointerupoutside', up);
+  }
+  async function holdLoop() {
+    while (G.holding) {
+      if (G.busy || Screens.isOpen() || Help.isOpen()) { await wait(80); continue; }
+      if (G.balance + 1e-9 < bet()) { toast('Not enough balance'); break; }
+      await spin(false, true);
+    }
+  }
+  G.qaHold = (on) => { if (on) { G.holding = true; G.holdTurbo = true; refresh(); holdLoop(); } else { G.holding = false; G.holdTurbo = false; refresh(); } };
+  function toggleSound() {
+    G.sound = !G.sound; G.sfx = G.sound; G.music = G.sound;
+    syncMusic(); refresh(); blip(660);
+  }
+  G.toggleSound = toggleSound;
+  /* autospin: tap to start, tap again (or Spin / Space) to stop; stops on low balance or when help opens */
+  function startAuto() {
+    if (G.auto || Screens.isOpen() || Help.isOpen()) return;
+    G.auto = true; G.autoCount = 0; refresh(); blip(900, 80, 'square', 0.05);
+    autoLoop();
+  }
+  function stopAuto() {
+    if (!G.auto) return;
+    G.auto = false; refresh(); blip(500, 80, 'square', 0.05);
+    if (G.view) toast('AUTOSPIN OFF', 900);
+  }
+  G.startAuto = startAuto; G.stopAuto = stopAuto;
+  async function autoLoop() {
+    while (G.auto) {
+      if (Help.isOpen()) { stopAuto(); break; }
+      if (G.busy || Screens.isOpen()) { await wait(150); continue; }
+      if (G.balance + 1e-9 < bet()) { stopAuto(); toast('Not enough balance'); break; }
+      G.autoCount++;
+      await spin(false, true);
+      if (G.auto) await wait(350);
+    }
   }
 
   function addText(V, l) {
@@ -237,10 +334,10 @@
       case 'Reel_Frame': V.frameSprite = sp; V.frameLayer = l; break;
       case 'Logo': V.logo = sp; V.logoLayer = l; break;
       case 'Viking': V.viking = sp; V.vikingLayer = l; sp.anchor.set(0.5, 1); sp.position.set(l.x + l.w / 2, l.y + l.h); break;
-      case 'Spin_Button': V.spinBtn = sp; V.spinIcon = sp; button(sp, () => spin(false)); break;
+      case 'Spin_Button': V.spinBtn = sp; V.spinIcon = sp; button(sp, () => { if (sp.skipTap) { sp.skipTap = false; return; } spin(false); }); spinHold(sp); break;
       case 'Buy_Bonus': button(sp, () => buyFlow()); break;
-      case 'Sound_Button_1': V.sfxBtn = sp; button(sp, () => { G.sfx = !G.sfx; refresh(); blip(660); }); break;
-      case 'Sound_Button_2': V.musicBtn = sp; button(sp, () => { G.music = !G.music; syncMusic(); refresh(); }); break;
+      case 'Sound_Button_1': V.sfxBtn = sp; button(sp, () => toggleSound()); break;
+      case 'Sound_Button_2': sp.visible = false; break;   // Kris: one sound button only (its slot holds Auto / Turbo)
       case 'Bet_Arrow_L': button(sp, () => setBet(-1)); break;
       case 'Bet_Arrow_R': button(sp, () => setBet(1)); break;
       case 'Icon_Home': button(sp, () => toast('Home (prototype)')); break;
@@ -320,8 +417,9 @@
     if (V.texts.Balance) V.texts.Balance.text = 'BALANCE: ' + money(G.balance);
     if (V.texts.Bet) V.texts.Bet.text = 'BET ' + money(bet()) + '   |   BUY ' + money(bet() * E.BUY_COST);
     if (V.texts.LastWin) V.texts.LastWin.text = G.lastWin > 0 ? 'WIN ' + money(G.lastWin) : 'LAST WIN';
-    if (V.sfxBtn) V.sfxBtn.alpha = G.sfx ? 1 : 0.4;
-    if (V.musicBtn) V.musicBtn.alpha = G.music ? 1 : 0.4;
+    if (V.sfxBtn) V.sfxBtn.alpha = G.sound ? 1 : 0.4;
+    if (V.turboBtn) V.turboBtn.setOn(G.turbo || !!G.holdTurbo);
+    if (V.autoBtn) V.autoBtn.setOn(G.auto);
     const st = stateFor(); setMeter(st.lamp / E.LAMP_MAX, null, !G.busy && !G.meterInit); G.meterInit = true;
   }
   // Mead Meter: the value tweens; fx.js draws the liquid (wobble, bubbles, glow, foam at full)
@@ -359,6 +457,7 @@
   }
   function openHelp() {
     if (G.busy || Screens.isOpen() || Help.isOpen()) return;
+    stopAuto();
     Help.show(0);
   }
   G.openHelp = openHelp;
@@ -538,12 +637,12 @@
       blip(600, 380, 'sine', 0.04);
       const fn = (tk) => {
         if (sp.destroyed || G.view !== V) { app.ticker.remove(fn); if (!sp.destroyed) sp.destroy(); res(); return; }
-        t += tk.deltaMS * (G.qaTimeScale || 1) / 1000;
+        t += tk.deltaMS * speed() / 1000;
         const k = Math.min(1, t / D), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2, u = 1 - e;
         sp.x = u * u * x0 + 2 * u * e * cx + e * e * x1; sp.y = u * u * y0 + 2 * u * e * cy + e * e * y1;
         sp.rotation = e * spin;
         sp.scale.set(s0 * (1 + 0.3 * Math.sin(Math.PI * Math.min(1, k * 2.5))) * (1 - 0.68 * e));
-        acc += tk.deltaMS * (G.qaTimeScale || 1);
+        acc += tk.deltaMS * speed();
         while (acc > 14) { acc -= 14; FX.nuggetTrail(V, sp.x, sp.y, 1 - 0.5 * e); }
         if (k >= 1) {
           app.ticker.remove(fn); sp.destroy();
@@ -561,13 +660,14 @@
     sp.scale.set(sp.baseScale * 0.9); sp.tint = 0xfff6d0;
     tween(sp.scale, { x: sp.baseScale, y: sp.baseScale }, 260, 'back').then(() => { sp.tint = 0xffffff; });
   }
-  async function spin(buy) {
-    if (!buy) pressFx(G.view && G.view.spinBtn);
+  async function spin(buy, fromAuto) {
+    if (G.auto && !fromAuto) { stopAuto(); return; }   // Spin / Space during autospin = stop
+    if (!buy && !fromAuto) pressFx(G.view && G.view.spinBtn);
     if (G.busy || Screens.isOpen() || Help.isOpen()) return;
     const cost = buy ? bet() * E.BUY_COST : bet();
     if (G.balance + 1e-9 < cost) { toast('Not enough balance'); return; }
     if (ac && ac.state === 'suspended') ac.resume();
-    G.busy = true; G.balance -= cost; G.lastWin = 0; refresh();
+    G.busy = true; G.balance -= cost; G.lastWin = 0; G.spinCount = (G.spinCount || 0) + 1; refresh();
     try {
       const force = G.forceNext || undefined; G.forceNext = null;   // QA hook (e.g. { floorWipe: true })
       const round = E.playRound(rng, stateFor(), { buy, force });
@@ -599,7 +699,7 @@
     }
   }
   async function buyFlow() {
-    if (G.busy || Screens.isOpen() || Help.isOpen()) return;
+    if (G.busy || Screens.isOpen() || Help.isOpen() || G.auto) return;
     const cost = bet() * E.BUY_COST;
     if (G.balance + 1e-9 < cost) { toast('Not enough balance'); return; }
     const r = await Screens.show('buyConfirm', { fields: { Buy_desc: `${E.FS_AWARD} FREE SPINS FOR`, Buy_cost: Screens.money(cost) } });
