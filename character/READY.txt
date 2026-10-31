@@ -7,3 +7,4 @@ Default: idle_breathe. Default mix 0.25 s. Event clips play through, then back t
 Validated with the official spine-core 4.2.100 runtime: loads OK, every clip first frame == last frame (loopDiff 0).
 Refinement continues in place until ~02:50 (same file names; just reload).
 Updated 02:20: left raised-fist swap (painted, from fal hands sheet) in win_big / scatter_trigger / free_spins_cheer; scatter spray removed (kept FX off the face). Same file names.
+Updated 02:26: painted closed lid on the bulging eye (blinks); painted mouth swaps from the face sheet: grin (win_small), frown (lose_grumble), O (anticipation, scatter_trigger shock), smirk (idle_bored). Same file/animation/event names; all 10 loops loopDiff 0 in spine-core 4.2.100. FINAL for 3:00.
