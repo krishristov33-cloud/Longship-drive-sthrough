@@ -24,9 +24,29 @@
       }
       return [...s];
     };
-    await PIXI.Assets.load(urls(['intro']));                       // intro first, the rest in the background
-    SC.ready = PIXI.Assets.load(urls(Object.keys(SC.man.screens).filter((k) => k !== 'intro')));
+    SC.urls = urls;
+    /* MOBILE MEMORY (2026-10-31): preloading every screen put ~280 MB of textures on the GPU, which iOS / Android
+       browsers kill. Screens now load when they open and are freed when they close; only the small, frequent ones
+       (KEEP) stay resident. Raw files are prefetched into the HTTP cache (no GPU cost) so opening stays quick. */
+    await SC.need(['intro']);
+    SC.ready = Promise.resolve();
+    setTimeout(() => {
+      for (const u of urls(Object.keys(SC.man.screens).filter((k) => k !== 'intro'))) fetch(u).catch(() => {});
+    }, 4000);
   };
+  const KEEP = ['retrigger', 'buyConfirm'];
+  const live = new Set(['intro']);                                  // screens whose textures are on the GPU
+  SC.need = async function (ids) {
+    for (const id of ids) live.add(id);
+    await PIXI.Assets.load(SC.urls(ids));
+  };
+  SC.release = async function (ids) {
+    for (const id of ids) if (KEEP.indexOf(id) < 0) live.delete(id);
+    const keep = new Set(SC.urls([...live]));
+    const drop = SC.urls(ids.filter((id) => KEEP.indexOf(id) < 0)).filter((u) => !keep.has(u));
+    if (drop.length) { try { await PIXI.Assets.unload(drop); } catch (e) { /* already gone */ } }
+  };
+  SC.liveScreens = () => [...live];
   SC.isOpen = () => !!SC.open;
 
   /* ------------------------------------------------------------ text */
@@ -233,8 +253,8 @@
 
   /* opts: { fields: {name: text}, count: {name: {to, ms?}}, hideViking, autoMs } -> resolves with the button name / 'auto' / 'tap' */
   SC.show = async function (id, opts = {}) {
-    if (id !== 'intro') await SC.ready;
     const sc = SC.man.screens[id]; if (!sc) return 'missing';
+    await SC.need([id]);
     const V = SC.deps.view();
     const scr = build(id, V, opts);
     const done = new Promise((res) => { scr.resolve = res; });
@@ -279,14 +299,15 @@
     if (SC.open === scr) SC.open = null;
     await unmount(scr, id === 'intro' ? 300 : 250);
     if (opts.hideViking) SC.deps.vikingVisible(true);
+    SC.release([id]);
     return result;
   };
   SC.key = function () { if (SC.open && SC.open.key) SC.open.key(); };
 
   /* BIG -> MEGA -> EPIC: one count-up, the screen swaps as the total passes 40x and 100x */
   SC.bigWin = async function (win, bet) {
-    await SC.ready;
     const x = win / bet, ids = ['bigWin_big', 'bigWin_mega', 'bigWin_epic'];
+    await SC.need(ids);
     const th = ids.map((id) => SC.man.screens[id].tierThresholdX || 0);   // 15, 40, 100
     const finalTier = x >= th[2] ? 2 : x >= th[1] ? 1 : 0;
     const field = (id) => SC.man.screens[id].fields.find((f) => f.kind === 'money');
@@ -329,6 +350,7 @@
     if (SC.open === holder) SC.open = null;
     await unmount(scr, 300);
     SC.deps.vikingVisible(true);
+    SC.release(ids);
   };
 
   window.LDTScreens = SC;

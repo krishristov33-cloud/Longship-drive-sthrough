@@ -8,6 +8,7 @@
   const ART = { J: 'J', Q: 'Q', K: 'K', A: 'A', NUGGETS: 'Nuggets', KETCHUP: 'Ketchup', MEAD: 'Mead',
     LONGSHIP: 'Longship', WSIGN: 'W', VMAN: 'VikingMan', COIN: 'Coin', W: 'Wild', S: 'Scatter' };
   const BETS = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+  const ROYAL_SCALE = 0.84;   // J Q K A drawn at 84% of the cell fit
   const G = { balance: 1000, betIdx: 2, lastWin: 0, busy: false, sfx: true, music: true, grid: null, states: {},
     view: null, orient: null, spine: {}, spineStatus: {} };
   window.LDT = G;   // debug handle
@@ -139,11 +140,15 @@
   }
 
   /* ------------------------------------------------------------ music (Aiko's track, assets/music/longship_bgm.mp3) */
-  const bgm = new Audio('assets/music/longship_bgm.mp3');
-  bgm.loop = true; bgm.volume = 0.45; bgm.preload = 'auto';
+  // nothing is fetched or decoded until the first tap (mobile memory: the page must stay light at boot)
+  const bgm = new Audio();
+  bgm.loop = true; bgm.volume = 0.45; bgm.preload = 'none';
   G.bgm = bgm;
   function syncMusic() {
-    if (G.music && G.gestured) { const p = bgm.play(); if (p && p.catch) p.catch(() => {}); }
+    if (G.music && G.gestured) {
+      if (!bgm.src) bgm.src = 'assets/music/longship_bgm.mp3';
+      const p = bgm.play(); if (p && p.catch) p.catch(() => {});
+    }
     else bgm.pause();
   }
   G.syncMusic = syncMusic;
@@ -258,11 +263,12 @@
   function makeSym(V, id) {
     const c = new PIXI.Container();
     const art = ART[id], sd = G.spine[art];
+    const k = E.LOWS.indexOf(id) >= 0 ? ROYAL_SCALE : 1;   // Kris: royals pay least, so they read smaller
     if (sd) {
       const sp = spine.Spine.from({ skeleton: sd.sk, atlas: sd.at });
       // Animoto authors in landscape layout px with origin = cell centre: scale by cell size, not by bounds
       const s = G.spineCell ? Math.min(V.colW / G.spineCell[0], V.rowH / G.spineCell[1]) : Math.min(V.symW / sd.b.w, V.symH / sd.b.h);
-      sp.scale.set(s);
+      sp.scale.set(s * k);
       if (sd.anims.includes('idle')) sp.state.setAnimation(0, 'idle', true);
       sp.state.timeScale = 1; sp.state.update(Math.random() * 2);
       c.addChild(sp); c.spine = sp; c.isSpine = true;
@@ -270,7 +276,7 @@
       const sp = new PIXI.Sprite(PIXI.Assets.get('assets/symbols/' + art + '.png'));
       sp.anchor.set(0.5);
       const s = Math.min(V.symW / sp.texture.width, V.symH / sp.texture.height);
-      sp.scale.set(s);
+      sp.scale.set(s * k);
       c.addChild(sp);
     }
     c.baseScale = 1; c.symId = id;
