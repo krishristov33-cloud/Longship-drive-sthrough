@@ -321,7 +321,7 @@
     } catch (e) { /* audio optional */ }
   }
   /* Viking reactions: one hook so the Spine character (Animoto) can replace the code tweens later.
-     events: spin_start, anticipation, win_small, win_big, scatter_trigger, free_spins_cheer, lose_grumble */
+     events: spin_start (no-op on the rig), spin_start_key (Buy Bonus shout), anticipation, win_small, win_big, scatter_trigger, free_spins_cheer, lose_grumble */
   function vikingEvent(name) {
     const V = G.view; if (!V) return;
     if (G.vikingSpine && G.vikingSpine.play(name)) return;
@@ -550,7 +550,7 @@
       const force = G.forceNext || undefined; G.forceNext = null;   // QA hook (e.g. { floorWipe: true })
       const round = E.playRound(rng, stateFor(), { buy, force });
       G.lastRound = round;
-      vikingEvent('spin_start');
+      vikingEvent(buy ? 'spin_start_key' : 'spin_start');   // the shout only on key moments; normal spins stay on idles
       await playSpin(round.base);
       if (round.feature) {
         const f = round.feature;

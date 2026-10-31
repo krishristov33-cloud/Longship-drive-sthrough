@@ -93,12 +93,16 @@
       sp,
       play(ev) {
         switch (ev) {
-          case 'spin_start':
+          case 'spin_start': return true;   // Kris: a normal spin keeps the idle rotation going (no shout)
+          case 'spin_start_key':            // key moments only (Buy Bonus spin): the shout clip, then watch the reels
             st.mode = 'spinning'; st.stopped = false;
             play('spin_start', false);
             sp.state.addAnimation(0, st.fs && D.has('free_spins_cheer') ? 'free_spins_cheer' : 'idle_look_reels', true, 0);
             return true;
-          case 'anticipation': st.mode = 'spinning'; return play('anticipation', true);
+          case 'anticipation':
+            st.mode = 'spinning';
+            if (this.current === 'spin_start' && D.has('anticipation')) { sp.state.addAnimation(0, 'anticipation', true, 0); return true; }   // let the shout finish
+            return play('anticipation', true);
           case 'reels_stop': {
             if (st.mode !== 'spinning') return true;
             st.stopped = true;
