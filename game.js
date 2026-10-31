@@ -8,7 +8,7 @@
   const ART = { J: 'J', Q: 'Q', K: 'K', A: 'A', NUGGETS: 'Nuggets', KETCHUP: 'Ketchup', MEAD: 'Mead',
     LONGSHIP: 'Longship', WSIGN: 'W', VMAN: 'VikingMan', COIN: 'Coin', W: 'Wild', S: 'Scatter' };
   const BETS = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
-  const ROYAL_SCALE = 0.84;   // J Q K A drawn at 84% of the cell fit
+  const ROYAL_SCALE = { J: 0.84, Q: 0.84, K: 0.74, A: 0.84 };   // royals read smaller; K's chunky pickle needs extra (Kris)
   const G = { balance: 1000, betIdx: 2, lastWin: 0, busy: false, sfx: true, music: true, grid: null, states: {},
     view: null, orient: null, spine: {}, spineStatus: {} };
   window.LDT = G;   // debug handle
@@ -263,7 +263,7 @@
   function makeSym(V, id) {
     const c = new PIXI.Container();
     const art = ART[id], sd = G.spine[art];
-    const k = E.LOWS.indexOf(id) >= 0 ? ROYAL_SCALE : 1;   // Kris: royals pay least, so they read smaller
+    const k = ROYAL_SCALE[id] || 1;   // Kris: royals pay least, so they read smaller
     if (sd) {
       const sp = spine.Spine.from({ skeleton: sd.sk, atlas: sd.at });
       // Animoto authors in landscape layout px with origin = cell centre: scale by cell size, not by bounds
